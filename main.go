@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"mastore/store"
 	"os"
@@ -79,8 +78,8 @@ func processCommonFlags(fconf *string) (*log.Logger, *store.Store) {
 }
 
 func readCb(st *store.Store, entry string) {
-	os.Stdout.WriteString(entry)
 	checkInterrupted(st)
+	os.Stdout.WriteString(entry)
 }
 
 func read(fconf *string) {
@@ -96,16 +95,11 @@ func read(fconf *string) {
 func write(fconf *string) {
 	log_, st := processCommonFlags(fconf)
 
-	var err error
-	var str string
-	rd := bufio.NewReader(os.Stdin)
+	scan := bufio.NewScanner(os.Stdin)
+	for scan.Scan() {
+		checkInterrupted(st)
 
-	for ; err == nil; str, err = rd.ReadString('\n') {
-		if len(str) == 0 || str == "\n" {
-			continue
-		}
-
-		split := strings.SplitN(str, "\t", 2)
+		split := strings.SplitN(scan.Text(), "\t", 2)
 		if len(split) != 2 {
 			log_.Println("key without entry value, ignored")
 			continue
@@ -114,11 +108,9 @@ func write(fconf *string) {
 		if !st.AddEntry(split[0], split[1]) {
 			os.Exit(1)
 		}
-
-		checkInterrupted(st)
 	}
 
-	if err != io.EOF {
+	if err := scan.Err(); err != nil {
 		os.Exit(1)
 	}
 }

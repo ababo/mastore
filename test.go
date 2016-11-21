@@ -39,13 +39,13 @@ func doTest(log_ *log.Logger, st *store.Store, keynum int, entries int) bool {
 
 	log.Printf("started to insert %d entries", entries)
 	for i := 0; i < entries; i++ {
+		checkInterrupted(st)
+
 		key := keys[normIndex(len(keys))]
 		entry := randomString(rand.Int()%64 + 1)
 		if !st.AddEntry(key, entry) {
 			return false
 		}
-
-		checkInterrupted(st)
 	}
 
 	return st.Flush(true)

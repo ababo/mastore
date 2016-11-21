@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -78,9 +77,15 @@ func (s *Store) flushAccum(accum []string, accumSize int) {
 			continue
 		}
 
+		sec := accum[prev : i+1]
+		key := keyHash(key(sec[0]))
+
+		sec2 := make([]string, len(sec))
+		copy(sec2, sec)
+
 		limiter <- true
-		key := keyHash(key(accum[prev]))
-		go s.flushSection(finish, limiter, key, accum[prev:i+1])
+		go s.flushSection(finish, limiter, key, sec2)
+
 		prev = i + 1
 		count++
 	}
@@ -178,16 +183,12 @@ func (s *Store) appendCache(key uint16, path string, section []string) bool {
 
 func (s *Store) rebuildSectionIndex(key uint16,
 	cachePath string, section []string) bool {
-	s.log_.Printf("started to rebuild index for section %x", key)
 	spath := s.sectionPath(key)
-	if !s.readIndex(spath, &section) ||
-		!s.readIndex(cachePath, &section) {
+	if !s.readIndex(spath, &section) || !s.readCache(cachePath, &section) {
 		return false
 	}
-	s.log_.Printf("finished reading data for section %x", key)
 
 	sort.Sort(byKey(section))
-	s.log_.Printf("finished sorting data for section %x", key)
 
 	tpath := s.sectionPath(key) + ".tmp"
 	if err := os.Mkdir(tpath, os.FileMode(dirMode)); err != nil {
@@ -230,29 +231,8 @@ func (s *Store) readIndex(sectionPath string, dst *[]string) bool {
 			continue
 		}
 
-		in, err := os.Open(filepath.Join(sectionPath, v.Name()))
-		if err != nil {
-			s.log_.Printf("failed to open index file: %s", err)
-			return false
-		}
-		defer in.Close()
-
-		var gz *gzip.Reader
-		if gz, err = gzip.NewReader(in); err != nil {
-			s.log_.Printf("failed to create gzip reader: %s", err)
-			return false
-		}
-
-		var str string
-		rd := bufio.NewReader(gz)
-		for ; err == nil; str, err = rd.ReadString('\n') {
-			if len(str) != 0 && str != "\n" {
-				*dst = append(*dst, str)
-			}
-		}
-
-		if err != io.EOF {
-			s.log_.Printf("failed to read index file: %s", err)
+		name := filepath.Join(sectionPath, v.Name())
+		if !s.readIndexFile(name, dst) {
 			return false
 		}
 	}
@@ -260,23 +240,50 @@ func (s *Store) readIndex(sectionPath string, dst *[]string) bool {
 	return true
 }
 
+func (s *Store) readIndexFile(name string, dst *[]string) bool {
+	in, err := os.Open(name)
+	if err != nil {
+		s.log_.Printf("failed to open index file: %s", err)
+		return false
+	}
+	defer in.Close()
+
+	var gz *gzip.Reader
+	if gz, err = gzip.NewReader(in); err != nil {
+		s.log_.Printf("failed to create gzip reader: %s", err)
+		return false
+	}
+
+	scan := bufio.NewScanner(gz)
+	for scan.Scan() {
+		*dst = append(*dst, scan.Text())
+	}
+
+	if err := scan.Err(); err != nil {
+		s.log_.Printf("failed to read index file: %s", err)
+		return false
+	}
+
+	return true
+}
+
 func (s *Store) readCache(cachePath string, dst *[]string) bool {
 	in, err := os.Open(cachePath)
+	if os.IsNotExist(err) {
+		return true
+	}
 	if err != nil {
 		s.log_.Printf("failed to open cache file: %s", err)
 		return false
 	}
 	defer in.Close()
 
-	var str string
-	rd := bufio.NewReader(in)
-	for ; err == nil; str, err = rd.ReadString('\n') {
-		if len(str) != 0 && str != "\n" {
-			*dst = append(*dst, str)
-		}
+	scan := bufio.NewScanner(in)
+	for scan.Scan() {
+		*dst = append(*dst, scan.Text())
 	}
 
-	if err != io.EOF {
+	if err := scan.Err(); err != nil {
 		s.log_.Printf("failed to read cache file: %s", err)
 		return false
 	}
