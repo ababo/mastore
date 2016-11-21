@@ -13,8 +13,6 @@ import (
 	"strings"
 )
 
-const testKeys = 10000000
-
 func exeName() string {
 	return filepath.Base(os.Args[0])
 }

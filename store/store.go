@@ -12,7 +12,7 @@ type Store struct {
 
 	accum     []string
 	accumSize int
-	flushed   chan bool
+	flushedOK chan bool
 }
 
 func New(conf *Config, log_ *log.Logger) *Store {
@@ -22,7 +22,7 @@ func New(conf *Config, log_ *log.Logger) *Store {
 	signal.Notify(ch, os.Interrupt)
 	go func() {
 		<-ch
-		if st.Flush() && st.checkFlushed(true) {
+		if st.Flush(true) {
 			os.Exit(0)
 		} else {
 			os.Exit(1)

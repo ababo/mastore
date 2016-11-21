@@ -1,8 +1,10 @@
 package store
 
 type Config struct {
-	StorePath        string
-	AccumSizeMiB     int
-	MaxFileSizeKiB   int
-	CompressionLevel int
+	StorePath            string
+	MaxAccumSizeMiB      int
+	MaxCacheSizeKiB      int
+	MaxIndexBlockSizeKiB int
+	CompressionLevel     int
+	MaxGoroutines        int
 }
