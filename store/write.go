@@ -292,26 +292,21 @@ func (s *Store) readCache(cachePath string, dst *[]string) bool {
 }
 
 func (s *Store) writeIndex(sectionPath string, section []string) bool {
-	prev, size, dupls := 0, 0, 0
+	prev, size := 0, 0
 	max := s.conf.MaxIndexBlockSizeKiB * 1024
 	for i, v := range section {
 		size += len(v)
-		if i < len(section)-1 && size+len(section[i+1]) < max {
+		if i < len(section)-1 &&
+			(size+len(section[i+1]) < max ||
+				key(section[i+1]) == key(section[prev])) {
 			continue
 		}
 
-		name := fmt.Sprintf("_%s_%04x", key(section[prev]), dupls)
-		if !s.writeIndexFile(
-			filepath.Join(sectionPath, name), section[prev:i+1]) {
+		name := filepath.Join(sectionPath, "_"+key(section[prev]))
+		if !s.writeIndexFile(name, section[prev:i+1]) {
 			return false
 		}
 
-		if i > 0 && i < len(section)-1 &&
-			key(section[prev]) == key(section[i+1]) {
-			dupls++
-		} else {
-			dupls = 0
-		}
 		prev, size = i+1, 0
 	}
 
