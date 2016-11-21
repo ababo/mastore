@@ -44,6 +44,8 @@ func doTest(log_ *log.Logger, st *store.Store, keynum int, entries int) bool {
 		if !st.AddEntry(key, entry) {
 			return false
 		}
+
+		checkInterrupted(st)
 	}
 
 	return st.Flush(true)

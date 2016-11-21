@@ -24,6 +24,8 @@ func printUsage() {
 }
 
 func main() {
+	setInterruptHandler()
+
 	flag.Usage = printUsage
 	fconf := flag.String("config",
 		exeName()+".config", "Path to config file")
@@ -76,8 +78,9 @@ func processCommonFlags(fconf *string) (*log.Logger, *store.Store) {
 	return log_, st
 }
 
-func readCb(entry string) {
+func readCb(st *store.Store, entry string) {
 	os.Stdout.WriteString(entry)
+	checkInterrupted(st)
 }
 
 func read(fconf *string) {
@@ -111,6 +114,8 @@ func write(fconf *string) {
 		if !st.AddEntry(split[0], split[1]) {
 			os.Exit(1)
 		}
+
+		checkInterrupted(st)
 	}
 
 	if err != io.EOF {
