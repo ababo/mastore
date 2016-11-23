@@ -21,13 +21,14 @@ func (s *Store) AddValue(key, val string) bool {
 			if !ok {
 				return false
 			}
+		default:
 		}
 	}
 
 	rec := stripString(key, "\t\n") + "\t" + stripString(val, "\n")
 
 	max := s.conf.MaxAccumSizeMiB * 1024 * 1024
-	if s.accumSize+len(rec) > max && !s.Flush(false) {
+	if s.accumSize+len(rec)+1 > max && !s.Flush(false) {
 		return false
 	}
 
