@@ -232,12 +232,13 @@ func (s *Store) readIndex(
 		}
 
 		name := filepath.Join(sectionPath, v.Name())
-		ignored, ok := s.readIndexFile(name, dst, true)
-		if !ok {
+		info, err := os.Stat(name)
+		if err != nil {
+			s.log_.Printf("failed to check singularity: %s", err)
 			return nil, false
 		}
 
-		if ignored {
+		if info.Size() >= int64(s.conf.MinSingularSizeKiB*1024) {
 			key, _, ok := parseIndexFileName(v.Name())
 			if !ok {
 				s.log_.Printf("bad index file name: %s", err)
@@ -248,46 +249,39 @@ func (s *Store) readIndex(
 				singulars = make(map[string]int)
 			}
 			singulars[key]++
+		} else if !s.readIndexFile(name, dst) {
+			return nil, false
 		}
 	}
 
 	return singulars, true
 }
 
-func (s *Store) readIndexFile(name string,
-	dst *[]string, ignoreSingular bool) (bool, bool) {
+func (s *Store) readIndexFile(name string, dst *[]string) bool {
 	in, err := os.Open(name)
 	if err != nil {
 		s.log_.Printf("failed to open index file: %s", err)
-		return false, false
+		return false
 	}
 	defer in.Close()
 
 	var gz *gzip.Reader
 	if gz, err = gzip.NewReader(in); err != nil {
 		s.log_.Printf("failed to create gzip reader: %s", err)
-		return false, false
+		return false
 	}
 
-	size, dlen := 0, len(*dst)
 	scan := bufio.NewScanner(gz)
 	for scan.Scan() {
-		rec := scan.Text()
-		size += len(rec) + 1
-		*dst = append(*dst, rec)
+		*dst = append(*dst, scan.Text())
 	}
 
 	if err := scan.Err(); err != nil {
 		s.log_.Printf("failed to read index file: %s", err)
-		return false, false
+		return false
 	}
 
-	singular := size > s.conf.MaxIndexBlockSizeKiB*1024
-	if singular && ignoreSingular {
-		*dst = (*dst)[:dlen]
-	}
-
-	return singular, true
+	return true
 }
 
 func (s *Store) readCache(cachePath string, dst *[]string) bool {

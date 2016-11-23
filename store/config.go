@@ -5,6 +5,7 @@ type Config struct {
 	MaxAccumSizeMiB      int
 	MaxCacheSizeKiB      int
 	MaxIndexBlockSizeKiB int
+	MinSingularSizeKiB   int
 	CompressionLevel     int
 	MaxGoroutines        int
 }
