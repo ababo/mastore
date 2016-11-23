@@ -1,8 +1,8 @@
 package store
 
-type ReadFunc func(st *Store, entry string)
+type ReadFunc func(st *Store, val string)
 
-func (s *Store) FindEntries(key string, cb ReadFunc) bool {
+func (s *Store) FindValues(key string, cb ReadFunc) bool {
 
 	return false
 }

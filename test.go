@@ -28,22 +28,22 @@ func normIndex(size int) int {
 	return i
 }
 
-func doTest(log_ *log.Logger, st *store.Store, keynum int, entries int) bool {
+func doTest(log_ *log.Logger, st *store.Store, keys int, values int) bool {
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	log.Printf("started to generate %d random keys", keynum)
-	var keys []string
-	for i := 0; i < keynum; i++ {
-		keys = append(keys, randomString(rand.Int()%32+1))
+	log.Printf("started to generate %d random keys", keys)
+	var keys_ []string
+	for i := 0; i < keys; i++ {
+		keys_ = append(keys_, randomString(rand.Int()%32+1))
 	}
 
-	log.Printf("started to insert %d entries", entries)
-	for i := 0; i < entries; i++ {
+	log.Printf("started to insert %d values", values)
+	for i := 0; i < values; i++ {
 		checkInterrupted(st)
 
-		key := keys[normIndex(len(keys))]
-		entry := randomString(rand.Int()%64 + 1)
-		if !st.AddEntry(key, entry) {
+		key := keys_[normIndex(keys)]
+		val := randomString(rand.Int()%64 + 1)
+		if !st.AddValue(key, val) {
 			return false
 		}
 	}

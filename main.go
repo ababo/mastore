@@ -77,17 +77,17 @@ func processCommonFlags(fconf *string) (*log.Logger, *store.Store) {
 	return log_, st
 }
 
-func readCb(st *store.Store, entry string) {
+func readCb(st *store.Store, val string) {
 	checkInterrupted(st)
-	os.Stdout.WriteString(entry)
+	os.Stdout.WriteString(val)
 }
 
 func read(fconf *string) {
-	fkey := flag.String("key", "", "Key to read entries for")
+	fkey := flag.String("key", "", "Key to read values for")
 	flag.CommandLine.Parse(os.Args[2:])
 	_, st := processCommonFlags(fconf)
 
-	if !st.FindEntries(*fkey, readCb) {
+	if !st.FindValues(*fkey, readCb) {
 		os.Exit(1)
 	}
 }
@@ -101,11 +101,11 @@ func write(fconf *string) {
 
 		split := strings.SplitN(scan.Text(), "\t", 2)
 		if len(split) != 2 {
-			log_.Println("key without entry value, ignored")
+			log_.Println("key without value, ignored")
 			continue
 		}
 
-		if !st.AddEntry(split[0], split[1]) {
+		if !st.AddValue(split[0], split[1]) {
 			os.Exit(1)
 		}
 	}
@@ -117,10 +117,10 @@ func write(fconf *string) {
 
 func test(fconf *string) {
 	fkeys := flag.Int("keys", testKeys, "Total number of keys")
-	fentries := flag.Int("entries", testKeys, "Total number of entries")
+	fvals := flag.Int("values", testKeys, "Total number of values")
 	log_, st := processCommonFlags(fconf)
 
-	if !doTest(log_, st, *fkeys, *fentries) {
+	if !doTest(log_, st, *fkeys, *fvals) {
 		os.Exit(1)
 	}
 }

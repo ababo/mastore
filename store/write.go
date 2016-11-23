@@ -13,7 +13,7 @@ import (
 const dirMode = 0777
 const fileMode = 0644
 
-func (s *Store) AddEntry(key, entry string) bool {
+func (s *Store) AddValue(key, val string) bool {
 	if s.flushedOK != nil {
 		select {
 		case ok := <-s.flushedOK:
@@ -24,17 +24,18 @@ func (s *Store) AddEntry(key, entry string) bool {
 		}
 	}
 
-	key = stripString(key, "\t\n")
-	entry = stripString(entry, "\n")
-	line := key + "\t" + entry
+	rec := stripString(key, "\t\n") + "\t" + stripString(val, "\n")
 
 	max := s.conf.MaxAccumSizeMiB * 1024 * 1024
-	if s.accumSize+len(line) >= max && !s.Flush(false) {
+	if s.accumSize+len(rec) > max && !s.Flush(false) {
 		return false
 	}
 
-	s.accum = append(s.accum, line)
-	s.accumSize += len(line)
+	hash := keyHash(recordKey(rec))
+	sec := s.accum[hash]
+	sec = append(sec, rec)
+	s.accum[hash] = sec
+	s.accumSize += len(rec) + 1
 	return true
 }
 
@@ -50,7 +51,7 @@ func (s *Store) Flush(wait bool) bool {
 
 	s.flushedOK = make(chan bool)
 	go s.flushAccum(s.accum, s.accumSize)
-	s.accum, s.accumSize = nil, 0
+	s.accum, s.accumSize = make(map[uint16][]string), 0
 
 	if wait {
 		ok := <-s.flushedOK
@@ -61,37 +62,19 @@ func (s *Store) Flush(wait bool) bool {
 	return true
 }
 
-func (s *Store) flushAccum(accum []string, accumSize int) {
-	s.log_.Printf("started flushing (%d entries, %d bytes)",
+func (s *Store) flushAccum(accum map[uint16][]string, accumSize int) {
+	s.log_.Printf("started flushing (%d sections, %d bytes)",
 		len(accum), accumSize)
 
-	sort.Sort(newKeyHashCmp(accum))
-	s.log_.Printf("finished sorting accumulator")
-
-	prev, count := 0, 0
 	finish := make(chan bool)
 	limiter := make(chan bool, s.conf.MaxGoroutines)
-	for i := range accum {
-		if i < len(accum)-1 &&
-			keyHash(key(accum[i+1])) == keyHash(key(accum[prev])) {
-			continue
-		}
-
-		sec := accum[prev : i+1]
-		key := keyHash(key(sec[0]))
-
-		sec2 := make([]string, len(sec))
-		copy(sec2, sec)
-
+	for k, v := range accum {
 		limiter <- true
-		go s.flushSection(finish, limiter, key, sec2)
-
-		prev = i + 1
-		count++
+		go s.flushSection(finish, limiter, k, v)
 	}
 
 	ok := true
-	for i := 0; i < count; i++ {
+	for i := 0; i < len(accum); i++ {
 		if !<-finish {
 			ok = false
 		}
@@ -153,7 +136,7 @@ func (s *Store) flushSection(finish chan<- bool,
 		fsize = int(info.Size())
 	}
 
-	if fsize+size >= s.conf.MaxCacheSizeKiB*1024 {
+	if fsize+size > s.conf.MaxCacheSizeKiB*1024 {
 		ok = s.rebuildSectionIndex(key, path, section)
 	} else {
 		ok = s.appendCache(key, path, section)
@@ -184,7 +167,9 @@ func (s *Store) appendCache(key uint16, path string, section []string) bool {
 func (s *Store) rebuildSectionIndex(key uint16,
 	cachePath string, section []string) bool {
 	spath := s.sectionPath(key)
-	if !s.readIndex(spath, &section) || !s.readCache(cachePath, &section) {
+	var singulars map[string]int
+	singulars, ok := s.readIndex(spath, &section)
+	if !ok || !s.readCache(cachePath, &section) {
 		return false
 	}
 
@@ -196,7 +181,19 @@ func (s *Store) rebuildSectionIndex(key uint16,
 		return false
 	}
 
-	if !s.writeIndex(tpath, section) {
+	for k, v := range singulars {
+		for i := 0; i < v; i++ {
+			name := indexFileName(k, i)
+			if err := os.Link(filepath.Join(spath, name),
+				filepath.Join(tpath, name)); err != nil {
+				s.log_.Printf(
+					"failed to link index file: %s", err)
+				return false
+			}
+		}
+	}
+
+	if !s.writeIndex(tpath, section, singulars) {
 		return false
 	}
 
@@ -214,57 +211,82 @@ func (s *Store) rebuildSectionIndex(key uint16,
 	return true
 }
 
-func (s *Store) readIndex(sectionPath string, dst *[]string) bool {
+func (s *Store) readIndex(
+	sectionPath string, dst *[]string) (map[string]int, bool) {
 	info, err := os.Stat(sectionPath)
 	if os.IsNotExist(err) || (err == nil && !info.IsDir()) {
-		return true
+		return nil, true
 	}
 
 	files, err := ioutil.ReadDir(sectionPath)
 	if err != nil {
 		s.log_.Printf("failed to read index directory: %s", err)
-		return false
+		return nil, false
 	}
 
+	var singulars map[string]int
 	for _, v := range files {
 		if v.IsDir() || v.Name()[0] != '_' {
 			continue
 		}
 
 		name := filepath.Join(sectionPath, v.Name())
-		if !s.readIndexFile(name, dst) {
-			return false
+		ignored, ok := s.readIndexFile(name, dst, true)
+		if !ok {
+			return nil, false
+		}
+
+		if ignored {
+			key, _, ok := parseIndexFileName(v.Name())
+			if !ok {
+				s.log_.Printf("bad index file name: %s", err)
+				return nil, false
+			}
+
+			if singulars == nil {
+				singulars = make(map[string]int)
+			}
+			singulars[key]++
 		}
 	}
 
-	return true
+	return singulars, true
 }
 
-func (s *Store) readIndexFile(name string, dst *[]string) bool {
+func (s *Store) readIndexFile(name string,
+	dst *[]string, ignoreSingular bool) (bool, bool) {
 	in, err := os.Open(name)
 	if err != nil {
 		s.log_.Printf("failed to open index file: %s", err)
-		return false
+		return false, false
 	}
 	defer in.Close()
 
 	var gz *gzip.Reader
 	if gz, err = gzip.NewReader(in); err != nil {
 		s.log_.Printf("failed to create gzip reader: %s", err)
-		return false
+		return false, false
 	}
 
+	size, dlen := 0, len(*dst)
 	scan := bufio.NewScanner(gz)
 	for scan.Scan() {
-		*dst = append(*dst, scan.Text())
+		rec := scan.Text()
+		size += len(rec) + 1
+		*dst = append(*dst, rec)
 	}
 
 	if err := scan.Err(); err != nil {
 		s.log_.Printf("failed to read index file: %s", err)
-		return false
+		return false, false
 	}
 
-	return true
+	singular := size > s.conf.MaxIndexBlockSizeKiB*1024
+	if singular && ignoreSingular {
+		*dst = (*dst)[:dlen]
+	}
+
+	return singular, true
 }
 
 func (s *Store) readCache(cachePath string, dst *[]string) bool {
@@ -291,18 +313,22 @@ func (s *Store) readCache(cachePath string, dst *[]string) bool {
 	return true
 }
 
-func (s *Store) writeIndex(sectionPath string, section []string) bool {
+func (s *Store) writeIndex(sectionPath string,
+	section []string, singulars map[string]int) bool {
 	prev, size := 0, 0
 	max := s.conf.MaxIndexBlockSizeKiB * 1024
 	for i, v := range section {
 		size += len(v)
 		if i < len(section)-1 &&
-			(size+len(section[i+1]) < max ||
-				key(section[i+1]) == key(section[prev])) {
+			(size+len(section[i+1]) <= max ||
+				recordKey(section[i+1]) ==
+					recordKey(section[prev])) {
 			continue
 		}
 
-		name := filepath.Join(sectionPath, "_"+key(section[prev]))
+		key := recordKey(section[prev])
+		name := indexFileName(key, singulars[key])
+		name = filepath.Join(sectionPath, name)
 		if !s.writeIndexFile(name, section[prev:i+1]) {
 			return false
 		}
@@ -313,7 +339,7 @@ func (s *Store) writeIndex(sectionPath string, section []string) bool {
 	return true
 }
 
-func (s *Store) writeIndexFile(name string, lines []string) bool {
+func (s *Store) writeIndexFile(name string, recs []string) bool {
 	out, err := os.OpenFile(name,
 		os.O_CREATE|os.O_WRONLY, os.FileMode(fileMode))
 	if err != nil {
@@ -330,7 +356,7 @@ func (s *Store) writeIndexFile(name string, lines []string) bool {
 	}
 	defer gz.Close()
 
-	for _, v := range lines {
+	for _, v := range recs {
 		if _, err := fmt.Fprintln(gz, v); err != nil {
 			s.log_.Printf("failed to write index file: %s", err)
 			return false
