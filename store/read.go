@@ -1,6 +1,8 @@
 package store
 
 import (
+	"bufio"
+	"compress/gzip"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,6 +36,93 @@ func (s *Store) scanIndex(sectionPath string,
 		if !cont {
 			break
 		}
+	}
+
+	return true
+}
+
+func (s *Store) readIndex(
+	sectionPath string, dst *[]string) (map[string]int, bool) {
+	var singulars map[string]int
+	if !s.scanIndex(sectionPath, readIndexCb, dst, singulars) {
+		return nil, false
+	}
+	return singulars, true
+}
+
+func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
+	dst, singulars := a[0].(*[]string), a[1].(map[string]int)
+
+	info, err := os.Stat(name)
+	if err != nil {
+		s.log_.Printf("failed to check singularity: %s", err)
+		return false, false
+	}
+
+	if info.Size() >= int64(s.conf.MinSingularSizeKiB*1024) {
+		key, _, ok := parseIndexFileName(filepath.Base(name))
+		if !ok {
+			s.log_.Printf("bad index file name: %s", name)
+			return false, false
+		}
+
+		if singulars == nil {
+			singulars = make(map[string]int)
+		}
+		singulars[key]++
+	} else if !s.readIndexFile(name, dst) {
+		return false, false
+	}
+
+	return true, true
+}
+
+func (s *Store) readIndexFile(name string, dst *[]string) bool {
+	in, err := os.Open(name)
+	if err != nil {
+		s.log_.Printf("failed to open index file: %s", err)
+		return false
+	}
+	defer in.Close()
+
+	var gz *gzip.Reader
+	if gz, err = gzip.NewReader(in); err != nil {
+		s.log_.Printf("failed to create gzip reader: %s", err)
+		return false
+	}
+
+	scan := bufio.NewScanner(gz)
+	for scan.Scan() {
+		*dst = append(*dst, scan.Text())
+	}
+
+	if err := scan.Err(); err != nil {
+		s.log_.Printf("failed to read index file: %s", err)
+		return false
+	}
+
+	return true
+}
+
+func (s *Store) readCache(cachePath string, dst *[]string) bool {
+	in, err := os.Open(cachePath)
+	if os.IsNotExist(err) {
+		return true
+	}
+	if err != nil {
+		s.log_.Printf("failed to open cache file: %s", err)
+		return false
+	}
+	defer in.Close()
+
+	scan := bufio.NewScanner(in)
+	for scan.Scan() {
+		*dst = append(*dst, scan.Text())
+	}
+
+	if err := scan.Err(); err != nil {
+		s.log_.Printf("failed to read cache file: %s", err)
+		return false
 	}
 
 	return true

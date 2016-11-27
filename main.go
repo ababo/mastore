@@ -17,7 +17,7 @@ func exeName() string {
 }
 
 func printUsage() {
-	usage := "Usage %s: (read|write|test) [options]\n"
+	usage := "Usage: %s (read|write|test) [options]\n"
 	fmt.Fprintf(os.Stderr, usage, exeName())
 	flag.PrintDefaults()
 }
