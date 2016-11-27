@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -89,20 +88,20 @@ func (s *Store) flushAccum(accum map[uint16][]string, accumSize int) {
 	s.flushedOK <- ok
 }
 
-func (s *Store) sectionPath(key uint16) string {
-	keys := fmt.Sprintf("%04x", key)
+func (s *Store) sectionPath(hash uint16) string {
+	keys := fmt.Sprintf("%04x", hash)
 	return filepath.Join(os.ExpandEnv(s.conf.StorePath), keys)
 }
 
-func (s *Store) cachePath(key uint16) (string, bool) {
-	spath := s.sectionPath(key)
+func (s *Store) cachePath(hash uint16) (string, bool) {
+	spath := s.sectionPath(hash)
 	info, err := os.Stat(spath)
 	if os.IsNotExist(err) {
 		return spath, true
 	}
 	if err != nil {
 		s.log_.Printf("failed to obtain cache path for section %x: %s",
-			key, err)
+			hash, err)
 		return "", false
 	}
 	if info.IsDir() {
@@ -112,8 +111,8 @@ func (s *Store) cachePath(key uint16) (string, bool) {
 }
 
 func (s *Store) flushSection(finish chan<- bool,
-	limiter <-chan bool, key uint16, section []string) {
-	path, ok := s.cachePath(key)
+	limiter <-chan bool, hash uint16, section []string) {
+	path, ok := s.cachePath(hash)
 	if !ok {
 		<-limiter
 		finish <- false
@@ -138,15 +137,15 @@ func (s *Store) flushSection(finish chan<- bool,
 	}
 
 	if fsize+size > s.conf.MaxCacheSizeKiB*1024 {
-		ok = s.rebuildSectionIndex(key, path, section)
+		ok = s.rebuildSectionIndex(hash, path, section)
 	} else {
-		ok = s.appendCache(key, path, section)
+		ok = s.appendCache(path, section)
 	}
 	<-limiter
 	finish <- ok
 }
 
-func (s *Store) appendCache(key uint16, path string, section []string) bool {
+func (s *Store) appendCache(path string, section []string) bool {
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND,
 		os.FileMode(fileMode))
 	if err != nil {
@@ -165,9 +164,9 @@ func (s *Store) appendCache(key uint16, path string, section []string) bool {
 	return true
 }
 
-func (s *Store) rebuildSectionIndex(key uint16,
+func (s *Store) rebuildSectionIndex(hash uint16,
 	cachePath string, section []string) bool {
-	spath := s.sectionPath(key)
+	spath := s.sectionPath(hash)
 	var singulars map[string]int
 	singulars, ok := s.readIndex(spath, &section)
 	if !ok || !s.readCache(cachePath, &section) {
@@ -176,7 +175,7 @@ func (s *Store) rebuildSectionIndex(key uint16,
 
 	sort.Sort(byKey(section))
 
-	tpath := s.sectionPath(key) + ".tmp"
+	tpath := s.sectionPath(hash) + ".tmp"
 	if err := os.Mkdir(tpath, os.FileMode(dirMode)); err != nil {
 		s.log_.Printf("failed to create index directory: %s", err)
 		return false
@@ -208,53 +207,44 @@ func (s *Store) rebuildSectionIndex(key uint16,
 		return false
 	}
 
-	s.log_.Printf("finished rebuilding index for section %x", key)
+	s.log_.Printf("finished rebuilding index for section %x", hash)
 	return true
 }
 
 func (s *Store) readIndex(
 	sectionPath string, dst *[]string) (map[string]int, bool) {
-	info, err := os.Stat(sectionPath)
-	if os.IsNotExist(err) || (err == nil && !info.IsDir()) {
-		return nil, true
-	}
-
-	files, err := ioutil.ReadDir(sectionPath)
-	if err != nil {
-		s.log_.Printf("failed to read index directory: %s", err)
+	var singulars map[string]int
+	if !s.scanIndex(sectionPath, readIndexCb, dst, singulars) {
 		return nil, false
 	}
+	return singulars, true
+}
 
-	var singulars map[string]int
-	for _, v := range files {
-		if v.IsDir() || v.Name()[0] != '_' {
-			continue
-		}
+func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
+	dst, singulars := a[0].(*[]string), a[1].(map[string]int)
 
-		name := filepath.Join(sectionPath, v.Name())
-		info, err := os.Stat(name)
-		if err != nil {
-			s.log_.Printf("failed to check singularity: %s", err)
-			return nil, false
-		}
-
-		if info.Size() >= int64(s.conf.MinSingularSizeKiB*1024) {
-			key, _, ok := parseIndexFileName(v.Name())
-			if !ok {
-				s.log_.Printf("bad index file name: %s", err)
-				return nil, false
-			}
-
-			if singulars == nil {
-				singulars = make(map[string]int)
-			}
-			singulars[key]++
-		} else if !s.readIndexFile(name, dst) {
-			return nil, false
-		}
+	info, err := os.Stat(name)
+	if err != nil {
+		s.log_.Printf("failed to check singularity: %s", err)
+		return false, false
 	}
 
-	return singulars, true
+	if info.Size() >= int64(s.conf.MinSingularSizeKiB*1024) {
+		key, _, ok := parseIndexFileName(filepath.Base(name))
+		if !ok {
+			s.log_.Printf("bad index file name: %s", name)
+			return false, false
+		}
+
+		if singulars == nil {
+			singulars = make(map[string]int)
+		}
+		singulars[key]++
+	} else if !s.readIndexFile(name, dst) {
+		return false, false
+	}
+
+	return true, true
 }
 
 func (s *Store) readIndexFile(name string, dst *[]string) bool {

@@ -19,6 +19,10 @@ func recordKey(rec string) string {
 	return url.QueryEscape(rec[:strings.Index(rec, "\t")])
 }
 
+func recordValue(rec string) string {
+	return rec[strings.Index(rec, "\t")+1:]
+}
+
 func keyHash(key string) uint16 {
 	return crc16.ChecksumIBM([]byte(key))
 }
