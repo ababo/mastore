@@ -110,6 +110,8 @@ func write(fconf *string) {
 		}
 	}
 
+	st.Flush(true)
+
 	if err := scan.Err(); err != nil {
 		os.Exit(1)
 	}
