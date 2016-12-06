@@ -8,7 +8,7 @@ import (
 )
 
 const testKeys = 10000000
-const logValuesCount = 1000000
+const logValuesCount = 10000000000
 
 func randomString(strlen int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"

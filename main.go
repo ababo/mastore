@@ -78,7 +78,7 @@ func processCommonFlags(fconf *string) (*log.Logger, *store.Store) {
 }
 
 func readCb(st *store.Store, val string) {
-	checkInterrupted(st)
+	checkInterrupted(nil)
 	fmt.Println(val)
 }
 

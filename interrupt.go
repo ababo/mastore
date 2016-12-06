@@ -24,7 +24,9 @@ func setInterruptHandler() {
 
 func checkInterrupted(st *store.Store) {
 	if interrupted {
-		st.Flush(true)
+		if st != nil {
+			st.Flush(true)
+		}
 		os.Exit(1)
 	}
 }
