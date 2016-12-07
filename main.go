@@ -84,10 +84,12 @@ func readCb(st *store.Store, val string) {
 
 func read(fconf *string) {
 	fkey := flag.String("key", "", "Key to read values for")
+	fkeys := flag.Bool("keys", false, "Read all the keys")
 	flag.CommandLine.Parse(os.Args[2:])
 	_, st := processCommonFlags(fconf)
 
-	if !st.FindValues(*fkey, readCb) {
+	if (*fkeys && !st.FindKeys(readCb)) ||
+		(!*fkeys && !st.FindValues(*fkey, readCb)) {
 		os.Exit(1)
 	}
 }

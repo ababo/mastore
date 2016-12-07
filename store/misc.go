@@ -15,8 +15,16 @@ func stripString(str, chars string) string {
 	return str
 }
 
+func recordStrippedKey(rec string) string {
+	return rec[:strings.Index(rec, "\t")]
+}
+
 func recordKey(rec string) string {
-	return url.QueryEscape(rec[:strings.Index(rec, "\t")])
+	return url.QueryEscape(recordStrippedKey(rec))
+}
+
+func stripKey(key string) (string, error) {
+	return url.QueryUnescape(key)
 }
 
 func recordValue(rec string) string {

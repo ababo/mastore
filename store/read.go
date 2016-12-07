@@ -194,3 +194,40 @@ func findValuesCb(s *Store, name string, a ...interface{}) (bool, bool) {
 	*prev, *more = name, key2 == key
 	return *more, true
 }
+
+func (s *Store) FindKeys(cb ReadFunc) bool {
+	for i := 0; i <= 0xffff; i++ {
+		spath := s.sectionPath(uint16(i))
+		cpath, ok := s.cachePath(uint16(i))
+		if !ok {
+			return false
+		}
+
+		var section []string
+		singulars, ok := s.readIndex(spath, &section)
+		if !ok || !s.readCache(cpath, &section) {
+			return false
+		}
+
+		keys := make(map[string]bool)
+		for k := range singulars {
+			key, err := stripKey(k)
+			if err != nil {
+				s.log_.Printf("failed to strip key: %s", k)
+				return false
+			}
+
+			keys[key] = true
+		}
+
+		for _, v := range section {
+			keys[recordStrippedKey(v)] = true
+		}
+
+		for k := range keys {
+			cb(s, k)
+		}
+	}
+
+	return true
+}

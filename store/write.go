@@ -166,7 +166,6 @@ func (s *Store) appendCache(path string, section []string) bool {
 func (s *Store) rebuildSectionIndex(hash uint16,
 	cachePath string, section []string) bool {
 	spath := s.sectionPath(hash)
-	var singulars map[string]int
 	singulars, ok := s.readIndex(spath, &section)
 	if !ok || !s.readCache(cachePath, &section) {
 		return false
