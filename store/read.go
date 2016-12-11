@@ -44,14 +44,14 @@ func (s *Store) scanIndex(sectionPath string,
 func (s *Store) readIndex(
 	sectionPath string, dst *[]string) (map[string]int, bool) {
 	var singulars map[string]int
-	if !s.scanIndex(sectionPath, readIndexCb, dst, singulars) {
+	if !s.scanIndex(sectionPath, readIndexCb, dst, &singulars) {
 		return nil, false
 	}
 	return singulars, true
 }
 
 func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
-	dst, singulars := a[0].(*[]string), a[1].(map[string]int)
+	dst, singulars := a[0].(*[]string), a[1].(*map[string]int)
 
 	info, err := os.Stat(name)
 	if err != nil {
@@ -66,10 +66,10 @@ func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
 			return false, false
 		}
 
-		if singulars == nil {
-			singulars = make(map[string]int)
+		if (*singulars) == nil {
+			(*singulars) = make(map[string]int)
 		}
-		singulars[key]++
+		(*singulars)[key]++
 	} else if !s.readIndexFile(name, dst) {
 		return false, false
 	}
