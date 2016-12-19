@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/ababo/mastore/store"
 	"log"
-	"mastore/store"
 	"math/rand"
 	"time"
 )

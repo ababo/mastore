@@ -1,7 +1,7 @@
 package main
 
 import (
-	"mastore/store"
+	"github.com/ababo/mastore/store"
 	"os"
 	"os/signal"
 )
