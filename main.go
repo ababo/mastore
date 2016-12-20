@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/ababo/mastore/store"
-	"log"
+	logpkg "log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,18 +63,18 @@ func readConfig(name string) (*store.Config, error) {
 	return &conf, nil
 }
 
-func processCommonFlags(fconf *string) (*log.Logger, *store.Store) {
+func processCommonFlags(fconf *string) (*logpkg.Logger, *store.Store) {
 	flag.CommandLine.Parse(os.Args[2:])
 
 	conf, err := readConfig(*fconf)
 	if err != nil {
-		log.Fatalf("failed to read configuration: %s", err)
+		logpkg.Fatalf("failed to read configuration: %s", err)
 	}
 
-	log_ := log.New(os.Stderr, "", log.Ldate|log.Ltime)
-	st := store.New(conf, log_)
+	log := logpkg.New(os.Stderr, "", logpkg.Ldate|logpkg.Ltime)
+	st := store.New(conf, log)
 
-	return log_, st
+	return log, st
 }
 
 func readCb(st *store.Store, val string) {
@@ -95,7 +95,7 @@ func read(fconf *string) {
 }
 
 func write(fconf *string) {
-	log_, st := processCommonFlags(fconf)
+	log, st := processCommonFlags(fconf)
 
 	scan := bufio.NewScanner(os.Stdin)
 	for scan.Scan() {
@@ -103,7 +103,7 @@ func write(fconf *string) {
 
 		split := strings.SplitN(scan.Text(), "\t", 2)
 		if len(split) != 2 {
-			log_.Println("key without value, ignored")
+			log.Println("key without value, ignored")
 			continue
 		}
 
@@ -122,9 +122,9 @@ func write(fconf *string) {
 func test(fconf *string) {
 	fkeys := flag.Int("keys", testKeys, "Total number of keys")
 	fvals := flag.Int("values", testKeys, "Total number of values")
-	log_, st := processCommonFlags(fconf)
+	log, st := processCommonFlags(fconf)
 
-	if !doTest(log_, st, *fkeys, *fvals) {
+	if !doTest(log, st, *fkeys, *fvals) {
 		os.Exit(1)
 	}
 }

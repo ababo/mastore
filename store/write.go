@@ -11,6 +11,7 @@ import (
 const dirMode = 0777
 const fileMode = 0644
 
+// Adds a new record to the store.
 func (s *Store) AddValue(key, val string) bool {
 	if s.flushedOK != nil {
 		select {
@@ -38,8 +39,9 @@ func (s *Store) AddValue(key, val string) bool {
 	return true
 }
 
+// Writes in-memory records to disk.
 func (s *Store) Flush(wait bool) bool {
-	s.log_.Println("requested to flush")
+	s.log.Println("requested to flush")
 	if s.flushedOK != nil {
 		ok := <-s.flushedOK
 		s.flushedOK = nil
@@ -62,7 +64,7 @@ func (s *Store) Flush(wait bool) bool {
 }
 
 func (s *Store) flushAccum(accum map[uint16][]string, accumSize int) {
-	s.log_.Printf("started flushing (%d sections, %d bytes)",
+	s.log.Printf("started flushing (%d sections, %d bytes)",
 		len(accum), accumSize)
 
 	finish := make(chan bool)
@@ -80,9 +82,9 @@ func (s *Store) flushAccum(accum map[uint16][]string, accumSize int) {
 	}
 
 	if ok {
-		s.log_.Printf("finished flushing")
+		s.log.Printf("finished flushing")
 	} else {
-		s.log_.Printf("flushing failed")
+		s.log.Printf("flushing failed")
 	}
 	s.flushedOK <- ok
 }
@@ -99,7 +101,7 @@ func (s *Store) cachePath(hash uint16) (string, bool) {
 		return spath, true
 	}
 	if err != nil {
-		s.log_.Printf("failed to obtain cache path for section %x: %s",
+		s.log.Printf("failed to obtain cache path for section %x: %s",
 			hash, err)
 		return "", false
 	}
@@ -126,7 +128,7 @@ func (s *Store) flushSection(finish chan<- bool,
 	fsize := 0
 	info, err := os.Stat(path)
 	if err != nil && !os.IsNotExist(err) {
-		s.log_.Printf("failed to obtain file size: %s", err)
+		s.log.Printf("failed to obtain file size: %s", err)
 		<-limiter
 		finish <- false
 		return
@@ -148,14 +150,14 @@ func (s *Store) appendCache(path string, section []string) bool {
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND,
 		os.FileMode(fileMode))
 	if err != nil {
-		s.log_.Printf("failed to open cache: %s", err)
+		s.log.Printf("failed to open cache: %s", err)
 		return false
 	}
 	defer out.Close()
 
 	for _, v := range section {
 		if _, err := fmt.Fprintln(out, v); err != nil {
-			s.log_.Printf("failed to append cache: %s", err)
+			s.log.Printf("failed to append cache: %s", err)
 			return false
 		}
 	}
@@ -175,7 +177,7 @@ func (s *Store) rebuildSectionIndex(hash uint16,
 
 	tpath := s.sectionPath(hash) + ".tmp"
 	if err := os.Mkdir(tpath, os.FileMode(dirMode)); err != nil {
-		s.log_.Printf("failed to create index directory: %s", err)
+		s.log.Printf("failed to create index directory: %s", err)
 		return false
 	}
 
@@ -184,7 +186,7 @@ func (s *Store) rebuildSectionIndex(hash uint16,
 			name := indexFileName(k, i)
 			if err := os.Link(filepath.Join(spath, name),
 				filepath.Join(tpath, name)); err != nil {
-				s.log_.Printf(
+				s.log.Printf(
 					"failed to link index file: %s", err)
 				return false
 			}
@@ -196,16 +198,16 @@ func (s *Store) rebuildSectionIndex(hash uint16,
 	}
 
 	if err := os.RemoveAll(spath); err != nil {
-		s.log_.Printf("failed to remove index directory: %s", err)
+		s.log.Printf("failed to remove index directory: %s", err)
 		return false
 	}
 
 	if err := os.Rename(tpath, spath); err != nil {
-		s.log_.Printf("failed to rename index directory: %s", err)
+		s.log.Printf("failed to rename index directory: %s", err)
 		return false
 	}
 
-	s.log_.Printf("finished rebuilding index for section %x", hash)
+	s.log.Printf("finished rebuilding index for section %x", hash)
 	return true
 }
 
@@ -239,7 +241,7 @@ func (s *Store) writeIndexFile(name string, recs []string) bool {
 	out, err := os.OpenFile(name,
 		os.O_CREATE|os.O_WRONLY, os.FileMode(fileMode))
 	if err != nil {
-		s.log_.Printf("failed to open index file: %s", err)
+		s.log.Printf("failed to open index file: %s", err)
 		return false
 	}
 	defer out.Close()
@@ -247,14 +249,14 @@ func (s *Store) writeIndexFile(name string, recs []string) bool {
 	var gz *gzip.Writer
 	gz, err = gzip.NewWriterLevel(out, s.conf.CompressionLevel)
 	if err != nil {
-		s.log_.Printf("failed to create gzip writer: %s", err)
+		s.log.Printf("failed to create gzip writer: %s", err)
 		return false
 	}
 	defer gz.Close()
 
 	for _, v := range recs {
 		if _, err := fmt.Fprintln(gz, v); err != nil {
-			s.log_.Printf("failed to write index file: %s", err)
+			s.log.Printf("failed to write index file: %s", err)
 			return false
 		}
 	}

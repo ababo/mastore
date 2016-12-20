@@ -1,5 +1,6 @@
 package store
 
+// Store configuration.
 type Config struct {
 	StorePath            string
 	MaxAccumSizeMiB      int

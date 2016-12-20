@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/ababo/mastore/store"
-	"log"
+	logpkg "log"
 	"math/rand"
 	"time"
 )
@@ -29,20 +29,20 @@ func normIndex(size int) int {
 	return i
 }
 
-func doTest(log_ *log.Logger, st *store.Store, keys int, values int) bool {
+func doTest(log *logpkg.Logger, st *store.Store, keys int, values int) bool {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	log.Printf("started to generate %d random keys", keys)
-	var keys_ []string
+	var keys2 []string
 	for i := 0; i < keys; i++ {
-		keys_ = append(keys_, randomString(rand.Int()%32+1))
+		keys2 = append(keys2, randomString(rand.Int()%32+1))
 	}
 
 	log.Printf("started to insert %d values", values)
 	for i, size := 0, 0; i < values; i++ {
 		checkInterrupted(st)
 
-		key := keys_[normIndex(keys)]
+		key := keys2[normIndex(keys)]
 		val := randomString(rand.Int()%64 + 1)
 		if !st.AddValue(key, val) {
 			return false
@@ -50,7 +50,7 @@ func doTest(log_ *log.Logger, st *store.Store, keys int, values int) bool {
 
 		size += len(key) + len(val) + 2
 		if i != 0 && i%logValuesCount == 0 {
-			log_.Printf("added %d values (%d bytes)", i, size)
+			log.Printf("added %d values (%d bytes)", i, size)
 		}
 	}
 

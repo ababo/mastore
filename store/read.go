@@ -19,7 +19,7 @@ func (s *Store) scanIndex(sectionPath string,
 
 	files, err := ioutil.ReadDir(sectionPath)
 	if err != nil {
-		s.log_.Printf("failed to read index directory: %s", err)
+		s.log.Printf("failed to read index directory: %s", err)
 		return false
 	}
 
@@ -55,14 +55,14 @@ func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
 
 	info, err := os.Stat(name)
 	if err != nil {
-		s.log_.Printf("failed to check singularity: %s", err)
+		s.log.Printf("failed to check singularity: %s", err)
 		return false, false
 	}
 
 	if info.Size() >= int64(s.conf.MinSingularSizeKiB*1024) {
 		key, _, ok := parseIndexFileName(filepath.Base(name))
 		if !ok {
-			s.log_.Printf("bad index file name: %s", name)
+			s.log.Printf("bad index file name: %s", name)
 			return false, false
 		}
 
@@ -80,14 +80,14 @@ func readIndexCb(s *Store, name string, a ...interface{}) (bool, bool) {
 func (s *Store) readIndexFile(name string, dst *[]string) bool {
 	in, err := os.Open(name)
 	if err != nil {
-		s.log_.Printf("failed to open index file: %s", err)
+		s.log.Printf("failed to open index file: %s", err)
 		return false
 	}
 	defer in.Close()
 
 	var gz *gzip.Reader
 	if gz, err = gzip.NewReader(in); err != nil {
-		s.log_.Printf("failed to create gzip reader: %s", err)
+		s.log.Printf("failed to create gzip reader: %s", err)
 		return false
 	}
 
@@ -97,7 +97,7 @@ func (s *Store) readIndexFile(name string, dst *[]string) bool {
 	}
 
 	if err := scan.Err(); err != nil {
-		s.log_.Printf("failed to read index file: %s", err)
+		s.log.Printf("failed to read index file: %s", err)
 		return false
 	}
 
@@ -110,7 +110,7 @@ func (s *Store) readCache(cachePath string, dst *[]string) bool {
 		return true
 	}
 	if err != nil {
-		s.log_.Printf("failed to open cache file: %s", err)
+		s.log.Printf("failed to open cache file: %s", err)
 		return false
 	}
 	defer in.Close()
@@ -121,15 +121,17 @@ func (s *Store) readCache(cachePath string, dst *[]string) bool {
 	}
 
 	if err := scan.Err(); err != nil {
-		s.log_.Printf("failed to read cache file: %s", err)
+		s.log.Printf("failed to read cache file: %s", err)
 		return false
 	}
 
 	return true
 }
 
+// Callback function to read keys or values.
 type ReadFunc func(st *Store, val string)
 
+// Find all values for the given key.
 func (s *Store) FindValues(key string, cb ReadFunc) bool {
 	key = recordKey(key + "\t")
 	hash := keyHash(key)
@@ -195,6 +197,7 @@ func findValuesCb(s *Store, name string, a ...interface{}) (bool, bool) {
 	return *more, true
 }
 
+// Find all keys in the store.
 func (s *Store) FindKeys(cb ReadFunc) bool {
 	for i := 0; i <= 0xffff; i++ {
 		spath := s.sectionPath(uint16(i))
@@ -213,7 +216,7 @@ func (s *Store) FindKeys(cb ReadFunc) bool {
 		for k := range singulars {
 			key, err := stripKey(k)
 			if err != nil {
-				s.log_.Printf("failed to strip key: %s", k)
+				s.log.Printf("failed to strip key: %s", k)
 				return false
 			}
 
