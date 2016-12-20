@@ -128,10 +128,10 @@ func (s *Store) readCache(cachePath string, dst *[]string) bool {
 	return true
 }
 
-// Callback function to read keys or values.
+// ReadFunc is a callback function to read keys or values.
 type ReadFunc func(st *Store, val string)
 
-// Find all values for the given key.
+// FindValues reads all values for a given key.
 func (s *Store) FindValues(key string, cb ReadFunc) bool {
 	key = recordKey(key + "\t")
 	hash := keyHash(key)
@@ -197,7 +197,7 @@ func findValuesCb(s *Store, name string, a ...interface{}) (bool, bool) {
 	return *more, true
 }
 
-// Find all keys in the store.
+// FindKeys reads all keys in a store.
 func (s *Store) FindKeys(cb ReadFunc) bool {
 	for i := 0; i <= 0xffff; i++ {
 		spath := s.sectionPath(uint16(i))

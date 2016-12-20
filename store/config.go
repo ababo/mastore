@@ -1,6 +1,6 @@
 package store
 
-// Store configuration.
+// Config is a store configuration.
 type Config struct {
 	StorePath            string
 	MaxAccumSizeMiB      int

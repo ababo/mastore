@@ -14,7 +14,7 @@ type Store struct {
 	flushedOK chan bool
 }
 
-// Create a new store.
+// New creates a new store.
 func New(conf *Config, log *logpkg.Logger) *Store {
 	accum := make(map[uint16][]string)
 	return &Store{conf: conf, log: log, accum: accum}

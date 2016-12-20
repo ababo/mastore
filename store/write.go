@@ -11,7 +11,7 @@ import (
 const dirMode = 0777
 const fileMode = 0644
 
-// Adds a new record to the store.
+// AddValue adds a new record to a store.
 func (s *Store) AddValue(key, val string) bool {
 	if s.flushedOK != nil {
 		select {
@@ -39,7 +39,7 @@ func (s *Store) AddValue(key, val string) bool {
 	return true
 }
 
-// Writes in-memory records to disk.
+// Flush writes in-memory records to disk.
 func (s *Store) Flush(wait bool) bool {
 	s.log.Println("requested to flush")
 	if s.flushedOK != nil {
